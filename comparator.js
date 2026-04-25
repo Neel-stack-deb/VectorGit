@@ -46,7 +46,7 @@ function semanticDistance(vec1, vec2) {
  * @param {Number} threshold - Distance threshold to flag (default 0.3)
  * @returns {Array} Array of regression findings
  */
-function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.3) {
+function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.02) {
   const regressions = [];
 
   for (const newItem of newEmbeddings) {
@@ -72,9 +72,9 @@ function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.3) {
 }
 
 function getSeverity(distance) {
-  if (distance > 0.6) return 'CRITICAL';
-  if (distance > 0.4) return 'HIGH';
-  if (distance > 0.3) return 'MEDIUM';
+  if (distance > 0.08) return 'CRITICAL';
+  if (distance > 0.05) return 'HIGH';
+  if (distance > 0.03) return 'MEDIUM';
   return 'LOW';
 }
 

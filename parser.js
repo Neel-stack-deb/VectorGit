@@ -69,8 +69,7 @@ function extractFunctions(filePath) {
  * Generate a hash of file content for tracking
  */
 function hashFile(filePath) {
-  const content = fs.readFileSync(filePath, 'utf8');
-  return crypto.createHash('sha256').update(content).digest('hex').slice(0, 8);
+  return crypto.createHash('sha256').update(filePath).digest('hex').slice(0, 8);
 }
 
 /**
