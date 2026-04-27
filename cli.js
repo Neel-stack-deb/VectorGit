@@ -7,8 +7,44 @@ const parser = require('./parser');
 const embedder = require('./embedder');
 const comparator = require('./comparator');
 
+const useColor = process.stdout.isTTY;
+const color = {
+  reset: '\x1b[0m',
+  dim: '\x1b[2m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  red: '\x1b[31m',
+  cyan: '\x1b[36m',
+  bold: '\x1b[1m'
+};
+
+function paint(text, code) {
+  if (!useColor) {
+    return text;
+  }
+
+  return `${code}${text}${color.reset}`;
+}
+
+function logStep(message) {
+  console.log(paint(message, color.cyan));
+}
+
+function logSuccess(message) {
+  console.log(paint(`✔ ${message}`, color.green));
+}
+
+function logAlert(message) {
+  console.log(paint(`🚨 ${message}`, color.red));
+}
+
+function logMuted(message) {
+  console.log(paint(message, color.dim));
+}
+
 async function initProject() {
-  console.log('📦 Initializing VectorGit...');
+  console.log(paint('VectorGit', color.bold));
+  logStep('Initializing workspace...');
 
   // Ensure .vectorgit directory
   if (!fs.existsSync('.vectorgit')) {
@@ -17,13 +53,13 @@ async function initProject() {
 
   // Create empty embeddings file
   store.clearEmbeddings();
-  console.log('✓ Created .vectorgit/ directory');
+  logSuccess('Created .vectorgit/ directory');
 
   // Create git hook
   setupGitHook();
 
-  console.log('✓ VectorGit initialized');
-  console.log('  Next: Run "vectorgit analyze" to create baseline embeddings');
+  logSuccess('VectorGit initialized');
+  logMuted('Next: Run "vectorgit baseline" to create a safe baseline');
 }
 
 function setupGitHook() {
@@ -57,7 +93,8 @@ async function analyzeRepo() {
 }
 
 async function buildBaseline() {
-  console.log('🔍 Analyzing repository for baseline embeddings...');
+  console.log(paint('VectorGit Baseline', color.bold));
+  logStep('Parsing code...');
 
   const jsFiles = parser.findJSFiles('.');
   if (jsFiles.length === 0) {
@@ -65,7 +102,7 @@ async function buildBaseline() {
     return 0;
   }
 
-  console.log(`  Found ${jsFiles.length} JavaScript files`);
+  logMuted(`  Found ${jsFiles.length} JavaScript files`);
 
   let totalFunctions = 0;
   const allFunctions = [];
@@ -87,14 +124,14 @@ async function buildBaseline() {
     totalFunctions += functions.length;
   }
 
-  console.log(`  Extracted ${totalFunctions} functions`);
+  logMuted(`  Extracted ${totalFunctions} functions`);
 
   if (totalFunctions === 0) {
-    console.log('  No functions found to analyze');
+    logMuted('  No functions found to analyze');
     return;
   }
 
-  console.log('  Computing embeddings (this may take a moment)...');
+  logStep('Generating embeddings...');
 
   try {
     const codes = allFunctions.map(f => f.code);
@@ -115,29 +152,30 @@ async function buildBaseline() {
     // Save baseline
     store.replaceEmbeddings(embeddingMap);
 
-    console.log(`✓ Baseline initialized successfully`);
-    console.log(`  (${totalFunctions} functions stored)`);
-    console.log('  VectorGit is ready to detect semantic changes!');
+    logSuccess('Baseline initialized successfully');
+    logMuted(`  (${totalFunctions} functions stored)`);
+    logMuted('  VectorGit is ready to detect semantic changes!');
     return 0;
   } catch (e) {
-    console.error('❌ Embedding failed:', e.message);
+    logAlert(`Embedding failed: ${e.message}`);
     process.exit(1);
   }
 }
 
 async function checkChanges() {
-  console.log('🔐 Running semantic check...');
+  console.log(paint('VectorGit Check', color.bold));
 
   const baselineEmbeddings = store.getAllEmbeddings();
 
   if (Object.keys(baselineEmbeddings).length === 0) {
-    console.log('[OK] No baseline - skipping check. Run "vectorgit analyze" first.');
+    logMuted('No baseline - skipping check. Run "vectorgit baseline" first.');
     return 0;
   }
 
+  logStep('Parsing code...');
   const jsFiles = parser.findJSFiles('.');
   if (jsFiles.length === 0) {
-    console.log('[OK] No changes to check');
+    logMuted('No changes to check');
     return 0;
   }
 
@@ -159,11 +197,11 @@ async function checkChanges() {
   }
 
   if (allFunctions.length === 0) {
-    console.log('[OK] No functions found');
+    logMuted('No functions found');
     return 0;
   }
 
-  console.log('  Computing embeddings...');
+  logStep('Generating embeddings...');
 
   try {
     const codes = allFunctions.map(f => f.code);
@@ -183,6 +221,7 @@ async function checkChanges() {
     }
 
     // Compare
+    logStep('Comparing with baseline...');
     const regressions = comparator.compareEmbeddings(
       currentEmbeddings,
       baselineEmbeddings,
@@ -190,15 +229,16 @@ async function checkChanges() {
     );
 
     if (regressions.length === 0) {
-      console.log('[OK] No major semantic changes detected\n');
+      logSuccess('No major semantic changes detected');
       return 0;
     }
 
-    console.log('[⚠️  ALERT] Semantic Regression Detected\n');
+    logAlert('Semantic Regression Detected');
+    console.log('');
 
     for (const regression of regressions) {
-      console.log(`Zone: ${regression.zone}`);
-      console.log(`File: ${path.basename(regression.file)}`);
+      console.log(paint(`Zone: ${regression.zone}`, color.yellow));
+      console.log(`File: ${regression.file ? path.basename(regression.file) : 'unknown'}`);
       console.log(`Function: ${regression.name}`);
       console.log(`Score: ${regression.distance} (threshold: ${regression.threshold})`);
       console.log(`Confidence: ${regression.confidenceLabel} (${regression.confidence}%)`);
