@@ -3,6 +3,7 @@
  */
 const structural = require('./structural');
 const explain = require('./explain');
+const diff = require('./diff');
 function cosineSimilarity(vec1, vec2) {
   if (!vec1 || !vec2 || vec1.length !== vec2.length) {
     return null;
@@ -219,6 +220,11 @@ function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.02) 
       const riskLevel = getRiskLevel(riskScore);
       const impact = explain.synthesizeImpact(structuralIssues, distance, zone, newItem.name);
 
+      // Generate code diff
+      const baselineCode = baselineEntry?.code || '';
+      const currentCode = newItem.code || '';
+      const codeDiff = diff.formatDiff(baselineCode, currentCode);
+
       regressions.push({
         key: newItem.key,
         distance: parseFloat(distance.toFixed(3)),
@@ -237,6 +243,7 @@ function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.02) 
         riskLevel,
         structuralIssues,
         impact,
+        codeDiff,
         reasons: collectReasons(getAstValue(baselineEntry), newItem.ast)
       });
     }

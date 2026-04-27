@@ -6,6 +6,7 @@ const store = require('./store');
 const parser = require('./parser');
 const embedder = require('./embedder');
 const comparator = require('./comparator');
+const review = require('./review');
 
 const useColor = process.stdout.isTTY;
 const color = {
@@ -163,21 +164,16 @@ async function buildBaseline() {
   }
 }
 
-async function checkChanges() {
-  console.log(paint('VectorGit Check', color.bold));
-
+async function runSemanticCheck() {
   const baselineEmbeddings = store.getAllEmbeddings();
 
   if (Object.keys(baselineEmbeddings).length === 0) {
-    logMuted('No baseline - skipping check. Run "vectorgit baseline" first.');
-    return 0;
+    return { ok: false, error: 'No baseline - run "vectorgit baseline" first' };
   }
 
-  logStep('Parsing code...');
   const jsFiles = parser.findJSFiles('.');
   if (jsFiles.length === 0) {
-    logMuted('No changes to check');
-    return 0;
+    return { ok: true, regressions: [] };
   }
 
   const allFunctions = [];
@@ -199,17 +195,13 @@ async function checkChanges() {
   }
 
   if (allFunctions.length === 0) {
-    logMuted('No functions found');
-    return 0;
+    return { ok: true, regressions: [] };
   }
-
-  logStep('Generating embeddings...');
 
   try {
     const codes = allFunctions.map(f => f.code);
     const embeddings = await embedder.codesToEmbeddings(codes);
 
-    // Build current embedding map
     const currentEmbeddings = [];
     for (const { index, embedding } of embeddings) {
       const func = allFunctions[index];
@@ -223,91 +215,134 @@ async function checkChanges() {
       });
     }
 
-    // Compare
-    logStep('Comparing with baseline...');
     const regressions = comparator.compareEmbeddings(
       currentEmbeddings,
       baselineEmbeddings,
-      0.02 // threshold
+      0.02
     );
 
-    if (regressions.length === 0) {
-      logSuccess('No major semantic changes detected');
-      return 0;
-    }
+    return { ok: true, regressions };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
 
-    logAlert('Semantic Regression Detected');
+async function checkChanges() {
+  console.log(paint('VectorGit Check', color.bold));
+  logStep('Parsing code...');
+  logStep('Generating embeddings...');
+  logStep('Comparing with baseline...');
+
+  const result = await runSemanticCheck();
+
+  if (!result.ok) {
+    logMuted(result.error);
+    return 0;
+  }
+
+  if (result.regressions.length === 0) {
+    logSuccess('No major semantic changes detected');
+    return 0;
+  }
+
+  logAlert('Semantic Regression Detected');
+  console.log('');
+
+  for (const regression of result.regressions) {
+    let riskColor = color.green;
+    if (regression.riskLevel === 'MEDIUM') riskColor = color.yellow;
+    if (regression.riskLevel === 'HIGH') riskColor = color.red;
+
+    console.log('');
+    console.log(paint(`🚨 ${regression.riskLevel} RISK CHANGE`, riskColor));
+    console.log(`Risk Score: ${regression.riskScore}/100`);
+    console.log('');
+    console.log(paint(`Zone: ${regression.zone}`, color.yellow));
+    console.log(`File: ${regression.file ? path.basename(regression.file) : 'unknown'}`);
+    console.log(`Function: ${regression.name}`);
+    console.log(`Final Score: ${regression.finalScore} (threshold: ${regression.threshold})`);
+    console.log(`Confidence: ${regression.confidenceLabel} (${regression.confidence}%)`);
     console.log('');
 
-    for (const regression of regressions) {
-      // Risk level with color
-      let riskColor = color.green;
-      if (regression.riskLevel === 'MEDIUM') riskColor = color.yellow;
-      if (regression.riskLevel === 'HIGH') riskColor = color.red;
-
+    if (regression.impact) {
+      console.log('Impact:');
       console.log('');
-      console.log(paint(`🚨 ${regression.riskLevel} RISK CHANGE`, riskColor));
-      console.log(`Risk Score: ${regression.riskScore}/100`);
-      console.log('');
-      console.log(paint(`Zone: ${regression.zone}`, color.yellow));
-      console.log(`File: ${regression.file ? path.basename(regression.file) : 'unknown'}`);
-      console.log(`Function: ${regression.name}`);
-      console.log(`Final Score: ${regression.finalScore} (threshold: ${regression.threshold})`);
-      console.log(`Confidence: ${regression.confidenceLabel} (${regression.confidence}%)`);
+      console.log(regression.impact.summary);
       console.log('');
 
-      // Human-readable impact explanation
-      if (regression.impact) {
-        console.log('Impact:');
+      if (regression.impact.details && regression.impact.details.length > 0) {
+        console.log('Details:');
         console.log('');
-        console.log(regression.impact.summary);
+        for (const detail of regression.impact.details) {
+          console.log(`• ${detail}`);
+        }
         console.log('');
-
-        if (regression.impact.details && regression.impact.details.length > 0) {
-          console.log('Details:');
-          console.log('');
-          for (const detail of regression.impact.details) {
-            console.log(`• ${detail}`);
-          }
-          console.log('');
-        }
       }
+    }
 
-      console.log('Breakdown:');
-      console.log(`* Embedding Drift: ${regression.distance} (${regression.embeddingConfidence}%)`);
-      console.log(`* Structural Drift: ${regression.structuralDrift} (${regression.structuralConfidence}%)`);
+    if (regression.codeDiff && regression.codeDiff.formatted) {
+      console.log('Code Diff:');
       console.log('');
-      console.log('Structural Analysis:');
-      console.log('');
-
-      if (regression.structuralIssues && regression.structuralIssues.length > 0) {
-        for (const issue of regression.structuralIssues) {
-          console.log(`* ${issue}`);
-        }
-      } else {
-        logMuted('(no structural changes detected)');
-      }
-
-      console.log('');
-      console.log('Reasons:');
-      console.log('');
-
-      if (regression.reasons && regression.reasons.length > 0) {
-        for (const reason of regression.reasons) {
-          console.log(`* ${reason}`);
-        }
-      } else {
-        console.log('* (no semantic reasons detected)');
-      }
-
+      console.log(regression.codeDiff.formatted);
       console.log('');
     }
 
-    return 1;
-  } catch (e) {
-    console.error('❌ Check failed:', e.message);
-    process.exit(1);
+    console.log('Breakdown:');
+    console.log(`* Embedding Drift: ${regression.distance} (${regression.embeddingConfidence}%)`);
+    console.log(`* Structural Drift: ${regression.structuralDrift} (${regression.structuralConfidence}%)`);
+    console.log('');
+    console.log('Structural Analysis:');
+    console.log('');
+
+    if (regression.structuralIssues && regression.structuralIssues.length > 0) {
+      for (const issue of regression.structuralIssues) {
+        console.log(`* ${issue}`);
+      }
+    } else {
+      logMuted('(no structural changes detected)');
+    }
+
+    console.log('');
+    console.log('Reasons:');
+    console.log('');
+
+    if (regression.reasons && regression.reasons.length > 0) {
+      for (const reason of regression.reasons) {
+        console.log(`* ${reason}`);
+      }
+    } else {
+      console.log('* (no semantic reasons detected)');
+    }
+
+    console.log('');
   }
+
+  return 1;
+}
+
+async function reviewMode() {
+  console.log(paint('VectorGit Review', color.bold));
+  logStep('Parsing code...');
+  logStep('Generating embeddings...');
+  logStep('Comparing with baseline...');
+
+  const result = await runSemanticCheck();
+
+  if (!result.ok) {
+    logMuted(result.error);
+    return 0;
+  }
+
+  if (result.regressions.length === 0) {
+    logSuccess('No regressions detected');
+    return 0;
+  }
+
+  // Output in PR-style format
+  console.log('');
+  console.log(review.formatPRReview(result.regressions));
+
+  return 1;
 }
 
 async function runCLI() {
@@ -323,10 +358,11 @@ Usage:
   vectorgit baseline  Parse current codebase and overwrite the baseline
   vectorgit analyze   Alias for baseline
   vectorgit commit    Check for semantic regressions before commit
+  vectorgit review    Output regressions in PR-style format
 
 Example:
   vectorgit init
-  vectorgit analyze
+  vectorgit baseline
   git add .
   vectorgit commit
 
@@ -350,6 +386,10 @@ Environment:
       case 'commit':
         const exitCode = await checkChanges();
         process.exit(exitCode);
+        break;
+      case 'review':
+        const reviewExitCode = await reviewMode();
+        process.exit(reviewExitCode);
         break;
       default:
         console.error(`Unknown command: ${command}`);
