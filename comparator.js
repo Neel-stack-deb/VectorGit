@@ -39,6 +39,84 @@ function semanticDistance(vec1, vec2) {
   return 1 - similarity;
 }
 
+function getEmbeddingValue(entry) {
+  if (!entry) {
+    return null;
+  }
+
+  if (Array.isArray(entry)) {
+    return entry;
+  }
+
+  return entry.embedding || null;
+}
+
+function getAstValue(entry) {
+  if (!entry || Array.isArray(entry)) {
+    return null;
+  }
+
+  return entry.ast || null;
+}
+
+function normalizeList(values) {
+  return Array.from(new Set((values || []).filter(Boolean))).sort();
+}
+
+function listChanged(oldList, newList) {
+  const left = normalizeList(oldList);
+  const right = normalizeList(newList);
+
+  if (left.length !== right.length) {
+    return true;
+  }
+
+  for (let index = 0; index < left.length; index++) {
+    if (left[index] !== right[index]) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function collectReasons(baselineAst, currentAst) {
+  const reasons = [];
+
+  if (!baselineAst || !currentAst) {
+    return reasons;
+  }
+
+  if (listChanged(baselineAst.conditionals, currentAst.conditionals)) {
+    reasons.push('Conditional logic modified');
+  }
+
+  if (listChanged(baselineAst.booleanExpressions, currentAst.booleanExpressions)) {
+    reasons.push('Boolean expression altered');
+  }
+
+  if (listChanged(baselineAst.returnValues, currentAst.returnValues)) {
+    reasons.push('Return behavior changed');
+  }
+
+  if (listChanged(baselineAst.functionCalls, currentAst.functionCalls)) {
+    reasons.push('Function call behavior changed');
+  }
+
+  const authRelated = Boolean(baselineAst.hasAuthContext || currentAst.hasAuthContext);
+  const logicChanged = reasons.some(reason =>
+    reason === 'Conditional logic modified' ||
+    reason === 'Boolean expression altered' ||
+    reason === 'Function call behavior changed'
+  );
+
+  if (authRelated && logicChanged) {
+    reasons.unshift('Authorization logic altered');
+  }
+
+  return reasons;
+}
+
 /**
  * Compare embeddings and flag regressions
  * @param {Array} newEmbeddings - Array of { key, embedding }
@@ -50,7 +128,8 @@ function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.02) 
   const regressions = [];
 
   for (const newItem of newEmbeddings) {
-    const baselineEmbedding = baselineEmbeddings[newItem.key];
+    const baselineEntry = baselineEmbeddings[newItem.key];
+    const baselineEmbedding = getEmbeddingValue(baselineEntry);
 
     if (!baselineEmbedding) {
       // New function, no baseline
@@ -63,7 +142,10 @@ function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.02) 
       regressions.push({
         key: newItem.key,
         distance: parseFloat(distance.toFixed(3)),
-        severity: getSeverity(distance)
+        severity: getSeverity(distance),
+        file: newItem.file,
+        name: newItem.name,
+        reasons: collectReasons(getAstValue(baselineEntry), newItem.ast)
       });
     }
   }

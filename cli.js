@@ -76,6 +76,7 @@ async function analyzeRepo() {
         fileHash,
         name: func.name,
         code: func.code,
+        ast: func.ast,
         key: `${fileHash}::${func.name}`
       });
     }
@@ -99,7 +100,12 @@ async function analyzeRepo() {
     const embeddingMap = {};
     for (const { index, embedding } of embeddings) {
       const func = allFunctions[index];
-      embeddingMap[func.key] = embedding;
+      embeddingMap[func.key] = {
+        embedding,
+        file: func.file,
+        name: func.name,
+        ast: func.ast
+      };
     }
 
     // Save baseline
@@ -140,6 +146,7 @@ async function checkChanges() {
         fileHash,
         name: func.name,
         code: func.code,
+        ast: func.ast,
         key: `${fileHash}::${func.name}`
       });
     }
@@ -164,7 +171,8 @@ async function checkChanges() {
         key: func.key,
         embedding,
         file: func.file,
-        name: func.name
+        name: func.name,
+        ast: func.ast
       });
     }
 
@@ -183,13 +191,21 @@ async function checkChanges() {
     console.log('[⚠️  ALERT] Semantic Regression Detected\n');
 
     for (const regression of regressions) {
-      const [fileHash, funcInfo] = regression.key.split('::');
-      const func = currentEmbeddings.find(e => e.key === regression.key);
+      console.log(`File: ${path.basename(regression.file)}`);
+      console.log(`Function: ${regression.name}`);
+      console.log(`Score: ${regression.distance}`);
+      console.log('');
+      console.log('Reasons:');
+      console.log('');
 
-      console.log(`  File: ${func.file}`);
-      console.log(`  Function: ${func.name}`);
-      console.log(`  Change Score: ${regression.distance}`);
-      console.log(`  Severity: ${regression.severity}`);
+      if (regression.reasons && regression.reasons.length > 0) {
+        for (const reason of regression.reasons) {
+          console.log(`* ${reason}`);
+        }
+      } else {
+        console.log('* AST baseline unavailable or no rule matched');
+      }
+
       console.log('');
     }
 
