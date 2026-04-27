@@ -191,9 +191,11 @@ async function checkChanges() {
     console.log('[⚠️  ALERT] Semantic Regression Detected\n');
 
     for (const regression of regressions) {
+      console.log(`Zone: ${regression.zone}`);
       console.log(`File: ${path.basename(regression.file)}`);
       console.log(`Function: ${regression.name}`);
-      console.log(`Score: ${regression.distance}`);
+      console.log(`Score: ${regression.distance} (threshold: ${regression.threshold})`);
+      console.log(`Confidence: ${regression.confidenceLabel} (${regression.confidence}%)`);
       console.log('');
       console.log('Reasons:');
       console.log('');

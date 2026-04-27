@@ -39,6 +39,36 @@ function semanticDistance(vec1, vec2) {
   return 1 - similarity;
 }
 
+function getConfidencePercentage(distance) {
+  return Math.max(0, Math.min(100, Math.round(distance * 100)));
+}
+
+function getConfidenceLabel(confidencePercentage) {
+  if (confidencePercentage <= 30) return 'LOW';
+  if (confidencePercentage < 70) return 'MEDIUM';
+  return 'HIGH';
+}
+
+function classifyZone(entry) {
+  const text = [entry?.name || '', entry?.file || ''].join(' ').toLowerCase();
+
+  if (/\b(auth|login|validate)\b/.test(text)) {
+    return 'AUTH';
+  }
+
+  if (/\b(payment|transaction)\b/.test(text)) {
+    return 'PAYMENT';
+  }
+
+  return 'GENERAL';
+}
+
+function getZoneThreshold(zone) {
+  if (zone === 'AUTH') return 0.2;
+  if (zone === 'PAYMENT') return 0.25;
+  return 0.5;
+}
+
 function getEmbeddingValue(entry) {
   if (!entry) {
     return null;
@@ -136,15 +166,22 @@ function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.02) 
       continue;
     }
 
+    const zone = classifyZone(newItem);
+    const zoneThreshold = getZoneThreshold(zone);
     const distance = semanticDistance(newItem.embedding, baselineEmbedding);
 
-    if (distance !== null && distance > threshold) {
+    if (distance !== null && distance > zoneThreshold) {
+      const confidence = getConfidencePercentage(distance);
       regressions.push({
         key: newItem.key,
         distance: parseFloat(distance.toFixed(3)),
         severity: getSeverity(distance),
         file: newItem.file,
         name: newItem.name,
+        zone,
+        threshold: zoneThreshold,
+        confidence,
+        confidenceLabel: getConfidenceLabel(confidence),
         reasons: collectReasons(getAstValue(baselineEntry), newItem.ast)
       });
     }
@@ -163,6 +200,10 @@ function getSeverity(distance) {
 module.exports = {
   cosineSimilarity,
   semanticDistance,
+  getConfidencePercentage,
+  getConfidenceLabel,
+  classifyZone,
+  getZoneThreshold,
   compareEmbeddings,
   getSeverity
 };
