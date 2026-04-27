@@ -53,12 +53,16 @@ EOF
 }
 
 async function analyzeRepo() {
+  return buildBaseline();
+}
+
+async function buildBaseline() {
   console.log('🔍 Analyzing repository for baseline embeddings...');
 
   const jsFiles = parser.findJSFiles('.');
   if (jsFiles.length === 0) {
     console.log('  No JavaScript files found');
-    return;
+    return 0;
   }
 
   console.log(`  Found ${jsFiles.length} JavaScript files`);
@@ -109,10 +113,12 @@ async function analyzeRepo() {
     }
 
     // Save baseline
-    store.saveEmbeddings(embeddingMap);
+    store.replaceEmbeddings(embeddingMap);
 
-    console.log(`✓ Saved ${totalFunctions} baseline embeddings`);
+    console.log(`✓ Baseline initialized successfully`);
+    console.log(`  (${totalFunctions} functions stored)`);
     console.log('  VectorGit is ready to detect semantic changes!');
+    return 0;
   } catch (e) {
     console.error('❌ Embedding failed:', e.message);
     process.exit(1);
@@ -228,7 +234,8 @@ VectorGit - Semantic Version Control for JavaScript
 
 Usage:
   vectorgit init      Initialize VectorGit in current directory
-  vectorgit analyze   Analyze repo and create baseline embeddings
+  vectorgit baseline  Parse current codebase and overwrite the baseline
+  vectorgit analyze   Alias for baseline
   vectorgit commit    Check for semantic regressions before commit
 
 Example:
@@ -247,6 +254,9 @@ Environment:
     switch (command) {
       case 'init':
         await initProject();
+        break;
+      case 'baseline':
+        await buildBaseline();
         break;
       case 'analyze':
         await analyzeRepo();

@@ -28,6 +28,11 @@ function saveEmbeddings(embeddings) {
   fs.writeFileSync(EMBEDDINGS_FILE, JSON.stringify(embeddings, null, 2));
 }
 
+function replaceEmbeddings(embeddings) {
+  ensureDir();
+  fs.writeFileSync(EMBEDDINGS_FILE, JSON.stringify(embeddings, null, 2));
+}
+
 function getBaselineEmbedding(fileHash, functionName) {
   const embeddings = loadEmbeddings();
   return embeddings[`${fileHash}::${functionName}`];
@@ -51,6 +56,7 @@ function clearEmbeddings() {
 module.exports = {
   loadEmbeddings,
   saveEmbeddings,
+  replaceEmbeddings,
   getBaselineEmbedding,
   setBaselineEmbedding,
   getAllEmbeddings,
