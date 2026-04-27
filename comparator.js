@@ -1,6 +1,7 @@
 /**
  * Cosine similarity between two vectors
  */
+const structural = require('./structural');
 function cosineSimilarity(vec1, vec2) {
   if (!vec1 || !vec2 || vec1.length !== vec2.length) {
     return null;
@@ -89,6 +90,14 @@ function getAstValue(entry) {
   return entry.ast || null;
 }
 
+function getStructuralValue(entry) {
+  if (!entry || Array.isArray(entry)) {
+    return null;
+  }
+
+  return entry.structural || null;
+}
+
 function normalizeList(values) {
   return Array.from(new Set((values || []).filter(Boolean))).sort();
 }
@@ -170,18 +179,34 @@ function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.02) 
     const zoneThreshold = getZoneThreshold(zone);
     const distance = semanticDistance(newItem.embedding, baselineEmbedding);
 
-    if (distance !== null && distance > zoneThreshold) {
-      const confidence = getConfidencePercentage(distance);
+    // Compute structural drift
+    const baselineStructural = getStructuralValue(baselineEntry);
+    const currentStructural = newItem.structural;
+    const structuralDrift = structural.computeStructuralDrift(baselineStructural, currentStructural);
+    const structuralIssues = structural.detectStructuralIssues(baselineStructural, currentStructural);
+
+    // Blend scores: 60% embedding, 40% structural
+    const finalScore = (0.6 * distance) + (0.4 * structuralDrift);
+
+    if (finalScore !== null && finalScore > zoneThreshold) {
+      const confidence = getConfidencePercentage(finalScore);
+      const embeddingConfidence = getConfidencePercentage(distance);
+      const structuralConfidence = getConfidencePercentage(structuralDrift);
       regressions.push({
         key: newItem.key,
         distance: parseFloat(distance.toFixed(3)),
-        severity: getSeverity(distance),
+        structuralDrift: parseFloat(structuralDrift.toFixed(3)),
+        finalScore: parseFloat(finalScore.toFixed(3)),
+        severity: getSeverity(finalScore),
         file: newItem.file,
         name: newItem.name,
         zone,
         threshold: zoneThreshold,
         confidence,
         confidenceLabel: getConfidenceLabel(confidence),
+        embeddingConfidence,
+        structuralConfidence,
+        structuralIssues,
         reasons: collectReasons(getAstValue(baselineEntry), newItem.ast)
       });
     }

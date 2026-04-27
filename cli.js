@@ -145,7 +145,8 @@ async function buildBaseline() {
         embedding,
         file: func.file,
         name: func.name,
-        ast: func.ast
+        ast: func.ast,
+        structural: func.structural
       };
     }
 
@@ -191,6 +192,7 @@ async function checkChanges() {
         name: func.name,
         code: func.code,
         ast: func.ast,
+        structural: func.structural,
         key: `${fileHash}::${func.name}`
       });
     }
@@ -216,7 +218,8 @@ async function checkChanges() {
         embedding,
         file: func.file,
         name: func.name,
-        ast: func.ast
+        ast: func.ast,
+        structural: func.structural
       });
     }
 
@@ -240,8 +243,24 @@ async function checkChanges() {
       console.log(paint(`Zone: ${regression.zone}`, color.yellow));
       console.log(`File: ${regression.file ? path.basename(regression.file) : 'unknown'}`);
       console.log(`Function: ${regression.name}`);
-      console.log(`Score: ${regression.distance} (threshold: ${regression.threshold})`);
+      console.log(`Final Score: ${regression.finalScore} (threshold: ${regression.threshold})`);
       console.log(`Confidence: ${regression.confidenceLabel} (${regression.confidence}%)`);
+      console.log('');
+      console.log('Breakdown:');
+      console.log(`* Embedding Drift: ${regression.distance} (${regression.embeddingConfidence}%)`);
+      console.log(`* Structural Drift: ${regression.structuralDrift} (${regression.structuralConfidence}%)`);
+      console.log('');
+      console.log('Structural Analysis:');
+      console.log('');
+
+      if (regression.structuralIssues && regression.structuralIssues.length > 0) {
+        for (const issue of regression.structuralIssues) {
+          console.log(`* ${issue}`);
+        }
+      } else {
+        logMuted('(no structural changes detected)');
+      }
+
       console.log('');
       console.log('Reasons:');
       console.log('');
@@ -251,7 +270,7 @@ async function checkChanges() {
           console.log(`* ${reason}`);
         }
       } else {
-        console.log('* AST baseline unavailable or no rule matched');
+        console.log('* (no semantic reasons detected)');
       }
 
       console.log('');

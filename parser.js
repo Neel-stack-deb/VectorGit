@@ -2,6 +2,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const parser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
+const structural = require('./structural');
 
 const AUTH_KEYWORDS = [
   'auth',
@@ -141,7 +142,8 @@ function extractFunctions(filePath) {
           code: code.slice(node.start, node.end),
           type: 'function',
           line: node.loc.start.line,
-          ast: collectFunctionFeatures(path, code)
+          ast: collectFunctionFeatures(path, code),
+          structural: structural.extractStructuralSignature(path, code)
         });
       },
       ArrowFunctionExpression(path) {
@@ -155,7 +157,8 @@ function extractFunctions(filePath) {
             code: code.slice(node.start, node.end),
             type: 'arrow',
             line: node.loc.start.line,
-            ast: collectFunctionFeatures(path, code)
+            ast: collectFunctionFeatures(path, code),
+            structural: structural.extractStructuralSignature(path, code)
           });
         }
       },
@@ -166,7 +169,8 @@ function extractFunctions(filePath) {
           code: code.slice(node.start, node.end),
           type: 'method',
           line: node.loc.start.line,
-          ast: collectFunctionFeatures(path, code)
+          ast: collectFunctionFeatures(path, code),
+          structural: structural.extractStructuralSignature(path, code)
         });
       }
     });
