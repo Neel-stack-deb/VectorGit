@@ -2,6 +2,7 @@
  * Cosine similarity between two vectors
  */
 const structural = require('./structural');
+const explain = require('./explain');
 function cosineSimilarity(vec1, vec2) {
   if (!vec1 || !vec2 || vec1.length !== vec2.length) {
     return null;
@@ -216,6 +217,7 @@ function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.02) 
       const structuralConfidence = getConfidencePercentage(structuralDrift);
       const riskScore = computeRiskScore(structuralDrift, distance, zone);
       const riskLevel = getRiskLevel(riskScore);
+      const impact = explain.synthesizeImpact(structuralIssues, distance, zone, newItem.name);
 
       regressions.push({
         key: newItem.key,
@@ -234,6 +236,7 @@ function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.02) 
         riskScore,
         riskLevel,
         structuralIssues,
+        impact,
         reasons: collectReasons(getAstValue(baselineEntry), newItem.ast)
       });
     }

@@ -255,6 +255,24 @@ async function checkChanges() {
       console.log(`Final Score: ${regression.finalScore} (threshold: ${regression.threshold})`);
       console.log(`Confidence: ${regression.confidenceLabel} (${regression.confidence}%)`);
       console.log('');
+
+      // Human-readable impact explanation
+      if (regression.impact) {
+        console.log('Impact:');
+        console.log('');
+        console.log(regression.impact.summary);
+        console.log('');
+
+        if (regression.impact.details && regression.impact.details.length > 0) {
+          console.log('Details:');
+          console.log('');
+          for (const detail of regression.impact.details) {
+            console.log(`• ${detail}`);
+          }
+          console.log('');
+        }
+      }
+
       console.log('Breakdown:');
       console.log(`* Embedding Drift: ${regression.distance} (${regression.embeddingConfidence}%)`);
       console.log(`* Structural Drift: ${regression.structuralDrift} (${regression.structuralConfidence}%)`);
