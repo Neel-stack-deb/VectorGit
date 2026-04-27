@@ -70,6 +70,28 @@ function getZoneThreshold(zone) {
   return 0.5;
 }
 
+function getZoneWeight(zone) {
+  if (zone === 'AUTH') return 1.0;
+  if (zone === 'PAYMENT') return 0.9;
+  return 0.5;
+}
+
+function computeRiskScore(structuralDrift, embeddingDistance, zone) {
+  const zoneWeight = getZoneWeight(zone);
+
+  // Blend: 50% structural, 30% embedding, 20% zone weight
+  const rawScore = (0.5 * structuralDrift) + (0.3 * embeddingDistance) + (0.2 * zoneWeight);
+
+  // Scale to 0-100
+  return Math.max(0, Math.min(100, Math.round(rawScore * 100)));
+}
+
+function getRiskLevel(riskScore) {
+  if (riskScore >= 70) return 'HIGH';
+  if (riskScore >= 30) return 'MEDIUM';
+  return 'LOW';
+}
+
 function getEmbeddingValue(entry) {
   if (!entry) {
     return null;
@@ -192,6 +214,9 @@ function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.02) 
       const confidence = getConfidencePercentage(finalScore);
       const embeddingConfidence = getConfidencePercentage(distance);
       const structuralConfidence = getConfidencePercentage(structuralDrift);
+      const riskScore = computeRiskScore(structuralDrift, distance, zone);
+      const riskLevel = getRiskLevel(riskScore);
+
       regressions.push({
         key: newItem.key,
         distance: parseFloat(distance.toFixed(3)),
@@ -206,6 +231,8 @@ function compareEmbeddings(newEmbeddings, baselineEmbeddings, threshold = 0.02) 
         confidenceLabel: getConfidenceLabel(confidence),
         embeddingConfidence,
         structuralConfidence,
+        riskScore,
+        riskLevel,
         structuralIssues,
         reasons: collectReasons(getAstValue(baselineEntry), newItem.ast)
       });

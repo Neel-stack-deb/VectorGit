@@ -240,6 +240,15 @@ async function checkChanges() {
     console.log('');
 
     for (const regression of regressions) {
+      // Risk level with color
+      let riskColor = color.green;
+      if (regression.riskLevel === 'MEDIUM') riskColor = color.yellow;
+      if (regression.riskLevel === 'HIGH') riskColor = color.red;
+
+      console.log('');
+      console.log(paint(`🚨 ${regression.riskLevel} RISK CHANGE`, riskColor));
+      console.log(`Risk Score: ${regression.riskScore}/100`);
+      console.log('');
       console.log(paint(`Zone: ${regression.zone}`, color.yellow));
       console.log(`File: ${regression.file ? path.basename(regression.file) : 'unknown'}`);
       console.log(`Function: ${regression.name}`);
