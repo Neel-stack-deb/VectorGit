@@ -76,7 +76,7 @@ async function analyzeRepo() {
         fileHash,
         name: func.name,
         code: func.code,
-        key: `${fileHash}::${func.name}@${func.line}`
+        key: `${fileHash}::${func.name}`
       });
     }
     totalFunctions += functions.length;
@@ -140,7 +140,7 @@ async function checkChanges() {
         fileHash,
         name: func.name,
         code: func.code,
-        key: `${fileHash}::${func.name}@${func.line}`
+        key: `${fileHash}::${func.name}`
       });
     }
   }
@@ -172,7 +172,7 @@ async function checkChanges() {
     const regressions = comparator.compareEmbeddings(
       currentEmbeddings,
       baselineEmbeddings,
-      0.3 // threshold
+      0.02 // threshold
     );
 
     if (regressions.length === 0) {
