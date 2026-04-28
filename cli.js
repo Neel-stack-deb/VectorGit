@@ -7,24 +7,19 @@ const parser = require('./parser');
 const embedder = require('./embedder');
 const comparator = require('./comparator');
 const review = require('./review');
+const chalk = require('chalk');
 
-const useColor = process.stdout.isTTY;
 const color = {
-  reset: '\x1b[0m',
-  dim: '\x1b[2m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  red: '\x1b[31m',
-  cyan: '\x1b[36m',
-  bold: '\x1b[1m'
+  dim: chalk.dim,
+  green: chalk.green,
+  yellow: chalk.yellow,
+  red: chalk.red,
+  cyan: chalk.cyan,
+  bold: chalk.bold
 };
 
-function paint(text, code) {
-  if (!useColor) {
-    return text;
-  }
-
-  return `${code}${text}${color.reset}`;
+function paint(text, style) {
+  return typeof style === 'function' ? style(text) : text;
 }
 
 function logStep(message) {
@@ -41,6 +36,85 @@ function logAlert(message) {
 
 function logMuted(message) {
   console.log(paint(message, color.dim));
+}
+
+function logHeader(message) {
+  console.log(paint(message, color.bold));
+}
+
+function printColoredDiff(formattedDiff) {
+  const lines = formattedDiff.split('\n');
+
+  for (const line of lines) {
+    if (line.startsWith('+ ')) {
+      console.log(chalk.green(line));
+      continue;
+    }
+
+    if (line.startsWith('- ')) {
+      console.log(chalk.red(line));
+      continue;
+    }
+
+    if (line.startsWith('⚠') || line.startsWith('•')) {
+      console.log(chalk.yellow(line));
+      continue;
+    }
+
+    if (line.endsWith(':')) {
+      console.log(chalk.cyan(line));
+      continue;
+    }
+
+    console.log(line);
+  }
+}
+
+function printColoredReview(reviewText) {
+  const lines = reviewText.split('\n');
+  let inDiffBlock = false;
+
+  for (const line of lines) {
+    if (line.trim().startsWith('```diff')) {
+      inDiffBlock = true;
+      console.log(chalk.cyan(line));
+      continue;
+    }
+
+    if (line.trim().startsWith('```')) {
+      inDiffBlock = false;
+      console.log(chalk.cyan(line));
+      continue;
+    }
+
+    if (inDiffBlock) {
+      if (line.startsWith('+ ')) {
+        console.log(chalk.green(line));
+      } else if (line.startsWith('- ')) {
+        console.log(chalk.red(line));
+      } else {
+        console.log(chalk.gray(line));
+      }
+      continue;
+    }
+
+    if (line.startsWith('## ') || line.startsWith('### ')) {
+      console.log(chalk.bold.cyan(line));
+      continue;
+    }
+
+    if (line.startsWith('**') && line.endsWith('**')) {
+      console.log(chalk.bold(line));
+      continue;
+    }
+
+    if (line.startsWith('- 🔴') || line.startsWith('- 🟡') || line.startsWith('- 🟢')) {
+      console.log(chalk.yellow(line));
+      continue;
+    }
+
+    console.log(line);
+  }
 }
 
 function normalizeTargetPath(targetPath) {
@@ -136,6 +210,7 @@ async function buildBaseline(targets = []) {
         name: func.name,
         code: func.code,
         ast: func.ast,
+        structural: func.structural,
         key: `${fileHash}::${func.name}`
       });
     }
@@ -163,6 +238,7 @@ async function buildBaseline(targets = []) {
         embedding,
         file: func.file,
         name: func.name,
+        code: func.code,
         ast: func.ast,
         structural: func.structural
       };
@@ -282,13 +358,13 @@ async function checkChanges(targets = []) {
     console.log('');
 
     if (regression.impact) {
-      console.log('Impact:');
+      logHeader('Impact:');
       console.log('');
       console.log(regression.impact.summary);
       console.log('');
 
       if (regression.impact.details && regression.impact.details.length > 0) {
-        console.log('Details:');
+        logHeader('Details:');
         console.log('');
         for (const detail of regression.impact.details) {
           console.log(`• ${detail}`);
@@ -298,17 +374,17 @@ async function checkChanges(targets = []) {
     }
 
     if (regression.codeDiff && regression.codeDiff.formatted) {
-      console.log('Code Diff:');
+      logHeader('Code Diff:');
       console.log('');
-      console.log(regression.codeDiff.formatted);
+      printColoredDiff(regression.codeDiff.formatted);
       console.log('');
     }
 
-    console.log('Breakdown:');
+    logHeader('Breakdown:');
     console.log(`* Embedding Drift: ${regression.distance} (${regression.embeddingConfidence}%)`);
     console.log(`* Structural Drift: ${regression.structuralDrift} (${regression.structuralConfidence}%)`);
     console.log('');
-    console.log('Structural Analysis:');
+    logHeader('Structural Analysis:');
     console.log('');
 
     if (regression.structuralIssues && regression.structuralIssues.length > 0) {
@@ -320,7 +396,7 @@ async function checkChanges(targets = []) {
     }
 
     console.log('');
-    console.log('Reasons:');
+    logHeader('Reasons:');
     console.log('');
 
     if (regression.reasons && regression.reasons.length > 0) {
@@ -357,7 +433,7 @@ async function reviewMode(targets = []) {
 
   // Output in PR-style format
   console.log('');
-  console.log(review.formatPRReview(result.regressions));
+  printColoredReview(review.formatPRReview(result.regressions));
 
   return 1;
 }

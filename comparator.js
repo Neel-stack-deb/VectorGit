@@ -55,11 +55,11 @@ function getConfidenceLabel(confidencePercentage) {
 function classifyZone(entry) {
   const text = [entry?.name || '', entry?.file || ''].join(' ').toLowerCase();
 
-  if (/\b(auth|login|validate)\b/.test(text)) {
+  if (['auth', 'login', 'validate'].some(keyword => text.includes(keyword))) {
     return 'AUTH';
   }
 
-  if (/\b(payment|transaction)\b/.test(text)) {
+  if (['payment', 'transaction'].some(keyword => text.includes(keyword))) {
     return 'PAYMENT';
   }
 

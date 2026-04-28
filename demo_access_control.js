@@ -1,21 +1,18 @@
-// Demo scenario: safe access control logic
-// Use this as the baseline file.
+// Demo scenario: modified access control logic with a subtle but dangerous bug
+// Replace the safe version with this content to trigger VectorGit.
 
 function validateSession(session) {
   if (!session || session.isExpired) {
     return false;
   }
 
-  // Deny access unless the session is trusted and MFA passed
-  if (!session.isTrusted || !session.mfaPassed) {
+  // Bug: weaker check. This now allows a session through if either
+  // trust OR MFA is present, instead of requiring both.
+  if (!session.isTrusted && !session.mfaPassed) {
     return false;
   }
 
-  // Guests should not reach sensitive actions
-  if (session.role === 'guest') {
-    return false;
-  }
-
+  // Bug: guest guard removed
   return true;
 }
 
