@@ -134,6 +134,29 @@ function filterFilesByTargets(files, targets) {
   });
 }
 
+function parseCommandOptions(args) {
+  const flags = {
+    ci: false
+  };
+
+  const targets = [];
+
+  for (const argument of args) {
+    if (argument === '--ci') {
+      flags.ci = true;
+      continue;
+    }
+
+    targets.push(argument);
+  }
+
+  return { flags, targets };
+}
+
+function hasHighRisk(regressions) {
+  return regressions.some(regression => regression.riskLevel === 'HIGH');
+}
+
 async function initProject() {
   console.log(paint('VectorGit', color.bold));
   logStep('Initializing workspace...');
@@ -338,6 +361,8 @@ async function checkChanges(targets = []) {
     return 0;
   }
 
+  const highRiskDetected = hasHighRisk(result.regressions);
+
   logAlert('Semantic Regression Detected');
   console.log('');
 
@@ -410,7 +435,12 @@ async function checkChanges(targets = []) {
     console.log('');
   }
 
-  return 1;
+  if (highRiskDetected) {
+    return 1;
+  }
+
+  logMuted('Only LOW/MEDIUM risk changes detected. Allowing pass.');
+  return 0;
 }
 
 async function reviewMode(targets = []) {
@@ -431,17 +461,42 @@ async function reviewMode(targets = []) {
     return 0;
   }
 
+  const highRiskDetected = hasHighRisk(result.regressions);
+
   // Output in PR-style format
   console.log('');
   printColoredReview(review.formatPRReview(result.regressions));
 
-  return 1;
+  return highRiskDetected ? 1 : 0;
+}
+
+async function analyzeCIMode(targets = []) {
+  const result = await runSemanticCheck(targets);
+
+  if (!result.ok) {
+    console.log('❌ Build Failed: Semantic Regression Check Error');
+    console.log(result.error);
+    return 1;
+  }
+
+  if (result.regressions.length === 0) {
+    console.log('✅ Build Passed: No Semantic Regression Detected');
+    return 0;
+  }
+
+  if (hasHighRisk(result.regressions)) {
+    console.log('❌ Build Failed: Semantic Regression Detected');
+    return 1;
+  }
+
+  console.log('✅ Build Passed: No High-Risk Semantic Regression Detected');
+  return 0;
 }
 
 async function runCLI() {
   const args = process.argv.slice(2);
   const command = args[0];
-  const targets = args.slice(1);
+  const { flags, targets } = parseCommandOptions(args.slice(1));
 
   if (!command) {
     console.log(`
@@ -450,7 +505,7 @@ VectorGit - Semantic Version Control for JavaScript
 Usage:
   vectorgit init      Initialize VectorGit in current directory
   vectorgit baseline [file...]  Parse selected files and overwrite the baseline
-  vectorgit analyze   Alias for baseline
+  vectorgit analyze [file...] [--ci]  Baseline (default) or CI check mode
   vectorgit commit [file...]    Check selected files for semantic regressions before commit
   vectorgit review [file...]    Output selected files in PR-style format
 
@@ -475,6 +530,10 @@ Environment:
         await buildBaseline(targets);
         break;
       case 'analyze':
+        if (flags.ci) {
+          const ciExitCode = await analyzeCIMode(targets);
+          process.exit(ciExitCode);
+        }
         await analyzeRepo(targets);
         break;
       case 'commit':

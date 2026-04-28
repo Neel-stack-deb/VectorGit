@@ -1,0 +1,28 @@
+name: VectorGit Semantic Check
+
+on:
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  vectorgit-semantic-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Simulated production-style CI run.
+      # Exits with code 1 if HIGH risk semantic regression is detected.
+      - name: Run VectorGit CI Analyze
+        run: node cli.js analyze --ci
