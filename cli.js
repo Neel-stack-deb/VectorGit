@@ -43,6 +43,23 @@ function logMuted(message) {
   console.log(paint(message, color.dim));
 }
 
+function normalizeTargetPath(targetPath) {
+  return path.resolve(process.cwd(), targetPath);
+}
+
+function filterFilesByTargets(files, targets) {
+  if (!targets || targets.length === 0) {
+    return files;
+  }
+
+  const normalizedTargets = targets.map(normalizeTargetPath);
+
+  return files.filter(file => {
+    const absoluteFilePath = normalizeTargetPath(file);
+    return normalizedTargets.some(target => absoluteFilePath === target || absoluteFilePath.endsWith(path.sep + target.split(path.sep).pop()));
+  });
+}
+
 async function initProject() {
   console.log(paint('VectorGit', color.bold));
   logStep('Initializing workspace...');
@@ -89,15 +106,15 @@ EOF
   console.log('✓ Set up pre-commit hook');
 }
 
-async function analyzeRepo() {
-  return buildBaseline();
+async function analyzeRepo(targets = []) {
+  return buildBaseline(targets);
 }
 
-async function buildBaseline() {
+async function buildBaseline(targets = []) {
   console.log(paint('VectorGit Baseline', color.bold));
   logStep('Parsing code...');
 
-  const jsFiles = parser.findJSFiles('.');
+  const jsFiles = filterFilesByTargets(parser.findJSFiles('.'), targets);
   if (jsFiles.length === 0) {
     console.log('  No JavaScript files found');
     return 0;
@@ -164,14 +181,14 @@ async function buildBaseline() {
   }
 }
 
-async function runSemanticCheck() {
+async function runSemanticCheck(targets = []) {
   const baselineEmbeddings = store.getAllEmbeddings();
 
   if (Object.keys(baselineEmbeddings).length === 0) {
     return { ok: false, error: 'No baseline - run "vectorgit baseline" first' };
   }
 
-  const jsFiles = parser.findJSFiles('.');
+  const jsFiles = filterFilesByTargets(parser.findJSFiles('.'), targets);
   if (jsFiles.length === 0) {
     return { ok: true, regressions: [] };
   }
@@ -227,13 +244,13 @@ async function runSemanticCheck() {
   }
 }
 
-async function checkChanges() {
+async function checkChanges(targets = []) {
   console.log(paint('VectorGit Check', color.bold));
   logStep('Parsing code...');
   logStep('Generating embeddings...');
   logStep('Comparing with baseline...');
 
-  const result = await runSemanticCheck();
+  const result = await runSemanticCheck(targets);
 
   if (!result.ok) {
     logMuted(result.error);
@@ -320,13 +337,13 @@ async function checkChanges() {
   return 1;
 }
 
-async function reviewMode() {
+async function reviewMode(targets = []) {
   console.log(paint('VectorGit Review', color.bold));
   logStep('Parsing code...');
   logStep('Generating embeddings...');
   logStep('Comparing with baseline...');
 
-  const result = await runSemanticCheck();
+  const result = await runSemanticCheck(targets);
 
   if (!result.ok) {
     logMuted(result.error);
@@ -348,6 +365,7 @@ async function reviewMode() {
 async function runCLI() {
   const args = process.argv.slice(2);
   const command = args[0];
+  const targets = args.slice(1);
 
   if (!command) {
     console.log(`
@@ -355,10 +373,10 @@ VectorGit - Semantic Version Control for JavaScript
 
 Usage:
   vectorgit init      Initialize VectorGit in current directory
-  vectorgit baseline  Parse current codebase and overwrite the baseline
+  vectorgit baseline [file...]  Parse selected files and overwrite the baseline
   vectorgit analyze   Alias for baseline
-  vectorgit commit    Check for semantic regressions before commit
-  vectorgit review    Output regressions in PR-style format
+  vectorgit commit [file...]    Check selected files for semantic regressions before commit
+  vectorgit review [file...]    Output selected files in PR-style format
 
 Example:
   vectorgit init
@@ -378,17 +396,17 @@ Environment:
         await initProject();
         break;
       case 'baseline':
-        await buildBaseline();
+        await buildBaseline(targets);
         break;
       case 'analyze':
-        await analyzeRepo();
+        await analyzeRepo(targets);
         break;
       case 'commit':
-        const exitCode = await checkChanges();
+        const exitCode = await checkChanges(targets);
         process.exit(exitCode);
         break;
       case 'review':
-        const reviewExitCode = await reviewMode();
+        const reviewExitCode = await reviewMode(targets);
         process.exit(reviewExitCode);
         break;
       default:
