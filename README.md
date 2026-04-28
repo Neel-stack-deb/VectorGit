@@ -43,7 +43,7 @@ Creates `.vectorgit/` directory and sets up git hooks.
 ### 4. Create Baseline Embeddings
 
 ```bash
-node cli.js analyze
+node cli.js baseline
 ```
 
 Analyzes all JS files in the repo and stores baseline embeddings.
@@ -51,10 +51,65 @@ Analyzes all JS files in the repo and stores baseline embeddings.
 ### 5. Run Semantic Check
 
 ```bash
-node cli.js commit
+node cli.js review
 ```
 
 Compares current code against baseline and flags regressions.
+
+## Terminal Command Sequences
+
+### 1. Sample Test Case (Built-in Demo)
+
+Use this exact sequence to baseline the safe version and then detect the buggy version.
+
+```bash
+# 1) Put safe code in active demo file
+cp demo_access_control_safe.js demo_access_control.js
+
+# 2) Save baseline from safe code
+node cli.js baseline demo_access_control.js
+
+# 3) Replace with buggy code
+cp demo_access_control_buggy.js demo_access_control.js
+
+# 4) Run review on the same file path
+node cli.js review demo_access_control.js
+```
+
+Windows PowerShell equivalent:
+
+```powershell
+Copy-Item .\demo_access_control_safe.js .\demo_access_control.js -Force
+node cli.js baseline demo_access_control.js
+Copy-Item .\demo_access_control_buggy.js .\demo_access_control.js -Force
+node cli.js review demo_access_control.js
+```
+
+### 2. User-Made Test Case
+
+Create your own safe file and buggy file, then use the same path for baseline and review.
+
+```bash
+# Example files you create:
+# auth_guard_safe.js
+# auth_guard_buggy.js
+
+# 1) Copy safe version to active file path
+cp auth_guard_safe.js auth_guard.js
+
+# 2) Baseline safe version
+node cli.js baseline auth_guard.js
+
+# 3) Replace active file with buggy version
+cp auth_guard_buggy.js auth_guard.js
+
+# 4) Check for regression
+node cli.js review auth_guard.js
+# or:
+node cli.js commit auth_guard.js
+```
+
+Important rule: baseline and review must run against the same target file path (for example `auth_guard.js`).
 
 ## Features
 
@@ -63,7 +118,7 @@ Compares current code against baseline and flags regressions.
 - Sets up pre-commit git hook
 - Initializes empty embeddings baseline
 
-### Command: `analyze`
+### Command: `baseline` (and alias `analyze`)
 - Finds all JavaScript files in repo
 - Extracts functions using Babel AST parser
 - Generates embeddings for each function
@@ -75,7 +130,7 @@ Compares current code against baseline and flags regressions.
 - Calculates cosine similarity
 - Flags functions with distance > 0.3 as regressions
 
-## Demo: Detecting Semantic Regression
+## Legacy Demo (Auth v1/v2)
 
 ### Step 1: Initialize
 
@@ -88,7 +143,7 @@ node cli.js init
 Copy v1 to active file:
 ```bash
 cp demo_auth_v1.js auth.js
-node cli.js analyze
+node cli.js baseline auth.js
 ```
 
 Output:
@@ -104,7 +159,7 @@ Output:
 
 ```bash
 cp demo_auth_v2.js auth.js
-node cli.js commit
+node cli.js review auth.js
 ```
 
 Output:
